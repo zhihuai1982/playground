@@ -1,0 +1,89 @@
+```{r}
+library(tidyverse)
+library(limma)
+```
+
+https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE167396
+
+```{r}
+ExprSet <- read.csv("./differential-expression/GSE167396_series_matrix.csv",sep = "\t",row.names = 1,header=TRUE, check.names=FALSE)
+```
+
+
+```{r}
+group <- data.frame(
+    GSM=c("GSM5104698","GSM5104699"),
+    TYPE = c("normal","disease")
+)
+```
+
+
+```{r}
+ExprSet %>% head()
+group
+```
+
+```{r}
+padj <- 0.01
+foldchange <- 0.5
+
+group <- group[,1]
+
+design <- model.matrix(~0+factor(group))
+colnames(design) <- levels(factor(group))
+rownames(design) <- colnames(ExprSet)
+
+```
+
+
+```{r}
+
+fit <- lmFit(ExprSet,design)
+
+cont.matrix <- makeContrasts(paste0(unique(group),collapse = "-"),levels = design)
+
+fit2 <- contrasts.fit(fit,cont.matrix)
+
+fit2 <- eBayes(fit2)
+
+tempOutput <- topTable(fit2,coef = 1,n=Inf,adjust="BH")
+
+nrDEG <- na.omit(tempOutput)
+
+diffUp <- nrDEG[(nrDEG$P.Value<padj &(nrDEG$logFC>foldchange)),]
+
+diffDown <- nrDEG[(nrDEG$P.Value<padj &(nrDEG$logFC<(-foldchange))),]
+
+
+
+```
+
+```{r}
+
+library("edgeR")
+
+rawdata <- as.matrix(ExprSet)
+rownames(rawdata) <- rawdata[,1]
+expression <- rawdata[,2:ncol(rawdata)]
+dimnames=list(rownames(expression),colnames(expression))
+
+data <- matrix(as.numeric(as.matrix(expression)),nrow=nrow(expression),dimnames = dimnames)
+
+
+group=c("normal","tumor")
+
+design <- model.matrix(~group)
+y <- edgeR::DGEList(counts=data,group=group)
+
+y <- calcNormFactors(y)
+y <- estimateCommonDisp(y)
+y <- estimateTagwiseDisp(y)
+et <- exactTest(y,pair=c("normal","tumor"))
+topTags(et)
+
+ordered_tags <- topTags(et,n=100000)
+
+
+
+```
+
